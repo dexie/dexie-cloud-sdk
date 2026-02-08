@@ -1,0 +1,68 @@
+{
+  "name": "dexie-cloud-sdk",
+  "version": "0.1.0",
+  "description": "Official JavaScript SDK for Dexie Cloud - Local-first database with sync",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build:watch": "npm run build -- --watch",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts,.js",
+    "lint:fix": "eslint src --ext .ts,.js --fix",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepublishOnly": "npm run build && npm run test && npm run lint"
+  },
+  "keywords": [
+    "dexie",
+    "dexie-cloud",
+    "indexeddb",
+    "local-first",
+    "database",
+    "sync",
+    "offline",
+    "real-time",
+    "typescript"
+  ],
+  "author": "David Fahlander <david.fahlander@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dexie/dexie-cloud-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dexie/dexie-cloud-sdk/issues"
+  },
+  "homepage": "https://github.com/dexie/dexie-cloud-sdk#readme",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "@vitest/ui": "^1.2.0",
+    "eslint": "^8.56.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "sideEffects": false
+}

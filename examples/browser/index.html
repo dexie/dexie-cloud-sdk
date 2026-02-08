@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dexie Cloud SDK - Browser Example</title>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { 
+            padding: 8px 12px; 
+            font-size: 16px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+        }
+        input { width: 100%; max-width: 300px; }
+        button { 
+            background: #007acc; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+        }
+        button:hover { background: #005a99; }
+        button:disabled { 
+            background: #ccc; 
+            cursor: not-allowed; 
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 4px; 
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .hidden { display: none; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🗄️ Dexie Cloud SDK - Browser Example</h1>
+    <p>Create a new Dexie Cloud database using OTP authentication.</p>
+
+    <form id="create-db-form">
+        <div class="form-group">
+            <label for="service-url">Service URL:</label>
+            <input 
+                type="url" 
+                id="service-url" 
+                value="http://localhost:3000"
+                placeholder="https://dexie.cloud"
+                required
+            />
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input 
+                type="email" 
+                id="email" 
+                placeholder="your@email.com"
+                required
+            />
+        </div>
+
+        <button type="submit">Request OTP</button>
+    </form>
+
+    <div id="otp-step" class="hidden">
+        <h3>📧 Check your email for OTP</h3>
+        <div class="form-group">
+            <label for="otp">Enter OTP:</label>
+            <input 
+                type="text" 
+                id="otp" 
+                placeholder="123456"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                required
+            />
+        </div>
+        <button onclick="verifyOTP()">Create Database</button>
+    </div>
+
+    <div id="status"></div>
+    
+    <div id="result" class="hidden">
+        <h3>✅ Database Created Successfully!</h3>
+        <div class="form-group">
+            <label>Database URL:</label>
+            <pre id="db-url"></pre>
+        </div>
+        <div class="form-group">
+            <label>Client ID:</label>
+            <pre id="client-id"></pre>
+        </div>
+        <div class="form-group">
+            <label>Access Token:</label>
+            <pre id="access-token"></pre>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import from CDN (in production, install via npm)
+        import { DexieCloudClient } from 'https://unpkg.com/dexie-cloud-sdk/dist/index.esm.js';
+
+        let client;
+        let otpId;
+        let email;
+
+        // Status helper
+        function showStatus(message, type = 'loading') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            status.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            document.getElementById('status').classList.add('hidden');
+        }
+
+        // Form submission
+        document.getElementById('create-db-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const serviceUrl = document.getElementById('service-url').value;
+            email = document.getElementById('email').value;
+
+            try {
+                showStatus('Connecting to service...');
+                client = new DexieCloudClient({ serviceUrl, debug: true });
+
+                // Check if service is ready
+                await client.waitForReady(10000);
+
+                showStatus('Requesting OTP...');
+                otpId = await client.auth.requestOTP(email, ['CREATE_DB']);
+
+                showStatus('OTP sent! Check your email.', 'success');
+                document.getElementById('create-db-form').classList.add('hidden');
+                document.getElementById('otp-step').classList.remove('hidden');
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        // Global function for OTP verification
+        window.verifyOTP = async function() {
+            const otp = document.getElementById('otp').value;
+            
+            if (!otp || otp.length !== 6) {
+                showStatus('Please enter a valid 6-digit OTP', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Verifying OTP and creating database...');
+
+                // Verify OTP
+                const { accessToken } = await client.auth.verifyOTP(email, otpId, otp, ['CREATE_DB']);
+
+                // Create database
+                const database = await client.databases.create(accessToken, {
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                });
+
+                // Show results
+                hideStatus();
+                document.getElementById('otp-step').classList.add('hidden');
+                document.getElementById('result').classList.remove('hidden');
+                
+                document.getElementById('db-url').textContent = database.url;
+                document.getElementById('client-id').textContent = database.clientId;
+                document.getElementById('access-token').textContent = accessToken;
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        // Auto-focus OTP input when shown
+        const otpInput = document.getElementById('otp');
+        otpInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, ''); // Only digits
+        });
+    </script>
+</body>
+</html>
