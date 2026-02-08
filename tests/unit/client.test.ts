@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { DexieCloudClient } from '../../src/client.ts';
-import { DexieCloudError } from '../../src/types.ts';
+import { DexieCloudError } from '../../src/rest-types.ts';
 
 // Mock fetch
 const mockFetch = vi.fn();

@@ -5,8 +5,8 @@ import type {
   DatabaseInfo, 
   CreateDatabaseOptions,
   DexieCloudConfig 
-} from './types.js';
-import { DexieCloudError } from './types.js';
+} from './rest-types.js';
+import { DexieCloudError } from './rest-types.js';
 import type { HttpAdapter } from './adapters.js';
 
 export class DatabaseManager {
@@ -16,7 +16,7 @@ export class DatabaseManager {
   ) {}
 
   private get serviceUrl(): string {
-    return `${this.config.serviceUrl}/service`;
+    return `${this.config.databaseUrl}/service`;
   }
 
   /**

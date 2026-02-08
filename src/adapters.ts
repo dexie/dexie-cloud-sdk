@@ -1,7 +1,7 @@
 /**
  * HTTP client adapter for different environments
  */
-import type { DexieCloudConfig } from './types.js';
+import type { DexieCloudConfig } from './rest-types.js';
 
 export interface HttpAdapter {
   fetch(url: string, options?: RequestInit): Promise<Response>;

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { AuthManager } from '../../src/auth.ts';
-import { DexieCloudAuthError } from '../../src/types.ts';
+import { DexieCloudAuthError } from '../../src/rest-types.ts';
 import { FetchAdapter } from '../../src/adapters.ts';
 
 // Mock fetch
@@ -11,7 +11,9 @@ const mockFetch = vi.fn();
 
 describe('AuthManager', () => {
   const config = {
-    serviceUrl: 'https://test.com',
+    databaseUrl: 'https://test.com',
+    clientId: 'test-client',
+    clientSecret: 'test-secret',
     timeout: 5000,
   };
 

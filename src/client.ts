@@ -1,12 +1,21 @@
 /**
- * Main Dexie Cloud SDK Client
+ * Legacy Dexie Cloud Client (for database creation and OTP flows)
+ * 
+ * @deprecated Use DexieCloudClient from './rest-client.js' for REST API access
  */
-import type { DexieCloudConfig, DatabaseInfo, CreateDatabaseOptions, AuthTokens, HealthStatus } from './types.js';
-import { DexieCloudError } from './types.js';
+import type { DexieCloudConfig, CreateDatabaseOptions, AuthTokens, HealthStatus } from './rest-types.js';
+import { DexieCloudError, type DatabaseInfo } from './rest-types.js';
 import { createAdapter, type HttpAdapter } from './adapters.js';
 import { AuthManager } from './auth.js';
 import { DatabaseManager } from './database.js';
 import { HealthManager } from './health.js';
+
+interface LegacyDexieCloudConfig {
+  serviceUrl: string;
+  timeout?: number;
+  debug?: boolean;
+  fetch?: typeof globalThis.fetch;
+}
 
 export class DexieCloudClient {
   public readonly auth: AuthManager;
@@ -15,9 +24,9 @@ export class DexieCloudClient {
   
   private readonly http: HttpAdapter;
 
-  constructor(config: DexieCloudConfig | string) {
+  constructor(config: LegacyDexieCloudConfig | string) {
     // Allow passing just URL as string for convenience
-    const fullConfig: DexieCloudConfig = typeof config === 'string' 
+    const fullConfig: LegacyDexieCloudConfig = typeof config === 'string' 
       ? { serviceUrl: config }
       : config;
 
@@ -29,10 +38,20 @@ export class DexieCloudClient {
     // Remove trailing slash for consistency
     fullConfig.serviceUrl = fullConfig.serviceUrl.replace(/\/$/, '');
 
-    this.http = createAdapter(fullConfig);
-    this.auth = new AuthManager(fullConfig, this.http);
-    this.databases = new DatabaseManager(fullConfig, this.http);
-    this.health = new HealthManager(fullConfig, this.http);
+    // Convert to new config format
+    const restConfig: DexieCloudConfig = {
+      databaseUrl: fullConfig.serviceUrl, // Legacy uses serviceUrl
+      clientId: '', // Not used in legacy mode
+      clientSecret: '', // Not used in legacy mode
+      timeout: fullConfig.timeout,
+      debug: fullConfig.debug,
+      fetch: fullConfig.fetch,
+    };
+
+    this.http = createAdapter(restConfig);
+    this.auth = new AuthManager(restConfig, this.http);
+    this.databases = new DatabaseManager(restConfig, this.http);
+    this.health = new HealthManager(restConfig, this.http);
   }
 
   /**

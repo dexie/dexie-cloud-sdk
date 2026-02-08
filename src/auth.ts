@@ -4,12 +4,12 @@
 import type { 
   OTPRequest, 
   OTPVerification, 
-  TokenResponse, 
   AuthTokens,
   DatabaseTokens,
   DexieCloudConfig 
-} from './types.js';
-import { DexieCloudError, DexieCloudAuthError } from './types.js';
+} from './rest-types.js';
+import type { LegacyTokenResponse } from './legacy-types.js';
+import { DexieCloudError, DexieCloudAuthError } from './rest-types.js';
 import type { HttpAdapter } from './adapters.js';
 
 export class AuthManager {
@@ -19,7 +19,7 @@ export class AuthManager {
   ) {}
 
   private get serviceUrl(): string {
-    return `${this.config.serviceUrl}/service`;
+    return `${this.config.databaseUrl}/service`;
   }
 
   /**
@@ -44,7 +44,7 @@ export class AuthManager {
       );
     }
 
-    const data = await response.json() as TokenResponse;
+    const data = await response.json() as LegacyTokenResponse;
     if (data.type !== 'otp-sent' || !data.otp_id) {
       throw new DexieCloudAuthError(`Unexpected response: ${JSON.stringify(data)}`);
     }
@@ -80,7 +80,7 @@ export class AuthManager {
       );
     }
 
-    const data = await response.json() as TokenResponse;
+    const data = await response.json() as LegacyTokenResponse;
     if (data.type !== 'tokens' || !data.accessToken) {
       throw new DexieCloudAuthError(`Unexpected response: ${JSON.stringify(data)}`);
     }

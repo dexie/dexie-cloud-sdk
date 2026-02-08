@@ -1,8 +1,8 @@
 /**
  * Health and status monitoring
  */
-import type { HealthStatus, DexieCloudConfig } from './types.js';
-import { DexieCloudNetworkError } from './types.js';
+import type { HealthStatus, DexieCloudConfig } from './rest-types.js';
+import { DexieCloudNetworkError } from './rest-types.js';
 import type { HttpAdapter } from './adapters.js';
 
 export class HealthManager {
@@ -16,7 +16,7 @@ export class HealthManager {
    */
   async health(): Promise<boolean> {
     try {
-      const response = await this.http.fetch(`${this.config.serviceUrl}/health`);
+      const response = await this.http.fetch(`${this.config.databaseUrl}/health`);
       return response.ok;
     } catch {
       return false;
@@ -28,7 +28,7 @@ export class HealthManager {
    */
   async ready(): Promise<boolean> {
     try {
-      const response = await this.http.fetch(`${this.config.serviceUrl}/ready`);
+      const response = await this.http.fetch(`${this.config.databaseUrl}/ready`);
       return response.ok;
     } catch {
       return false;

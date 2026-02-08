@@ -4,12 +4,13 @@ Official JavaScript SDK for [Dexie Cloud](https://dexie.org) - Local-first datab
 
 ## 🚀 Features
 
-- **Type-safe API** - Full TypeScript support with strong typing
-- **Multi-environment** - Works in browsers, Node.js, Deno, and Cloudflare Workers  
-- **Simple authentication** - Built-in OTP email flows
-- **Database management** - Create and manage Dexie Cloud databases
-- **Health monitoring** - Check service status and wait for readiness
-- **Error handling** - Comprehensive error types with detailed messages
+- **🔑 Client Credentials Authentication** - Automatic token management with caching  
+- **📊 Type-safe REST API** - Full TypeScript support for all endpoints
+- **🌍 Multi-environment** - Works in browsers, Node.js, Deno, and Cloudflare Workers  
+- **📡 Complete API Coverage** - `/all`, `/my`, `/public`, `/users` endpoints
+- **🔄 TSON Support** - Handles Date, Blob, and other special types via dreambase-library
+- **⚡ Token Caching** - Intelligent token refresh with 5-minute buffer
+- **🛡️ Error Handling** - Comprehensive error types with detailed messages
 
 ## 📦 Installation
 
@@ -17,21 +18,37 @@ Official JavaScript SDK for [Dexie Cloud](https://dexie.org) - Local-first datab
 npm install dexie-cloud-sdk
 ```
 
-## 🔥 Quick Start
+For TSON support (special types like Date, Blob):
+```bash
+npm install dreambase-library
+```
+
+## 🔥 Quick Start (REST API Client)
 
 ```typescript
 import { DexieCloudClient } from 'dexie-cloud-sdk';
 
-const client = new DexieCloudClient('https://dexie.cloud');
-
-// Create a new database with OTP authentication
-const database = await client.createDatabase('user@example.com', async () => {
-  // Return the OTP code from email
-  // In real apps, this would prompt the user or fetch from email
-  return '123456';
+const client = new DexieCloudClient({
+  databaseUrl: 'https://abc123.dexie.cloud',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret'
 });
 
-console.log('Database created:', database.url);
+// Access all data (requires GLOBAL_READ scope)
+const allTodos = await client.data.all.list('todoItems');
+
+// Access user's data (requires ACCESS_DB scope)  
+const myTodos = await client.data.my.list('todoItems');
+
+// Create new data
+await client.data.my.save('todoItems', {
+  title: 'Learn Dexie Cloud',
+  completed: false,
+  createdAt: new Date()
+});
+
+// Manage users (requires GLOBAL_WRITE scope)
+const users = await client.users.list({ type: 'eval' });
 ```
 
 ## 📖 API Documentation
@@ -39,79 +56,157 @@ console.log('Database created:', database.url);
 ### Client Initialization
 
 ```typescript
-// Simple URL
-const client = new DexieCloudClient('https://dexie.cloud');
-
-// Full configuration
 const client = new DexieCloudClient({
-  serviceUrl: 'https://dexie.cloud',
-  timeout: 30000,
-  debug: true,
-  fetch: customFetch, // Optional custom fetch implementation
+  databaseUrl: 'https://your-database-id.dexie.cloud',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  timeout: 30000,           // Optional: request timeout
+  debug: true,              // Optional: enable debug logging
+  autoRefresh: true,        // Optional: auto-refresh tokens (default: true)
+  fetch: customFetch        // Optional: custom fetch implementation
 });
 ```
 
-### Authentication
+### Authentication & Scopes
 
-The SDK handles OTP (One-Time Password) authentication flows:
+The SDK automatically handles client credentials authentication with the following scopes:
+
+- **`ACCESS_DB`** - Basic database access
+- **`GLOBAL_READ`** - Read all data (required for `/all` endpoint)
+- **`GLOBAL_WRITE`** - Write all data (required for `/all` POST/DELETE)
+- **`IMPERSONATE`** - Act on behalf of users
+- **`MANAGE_DB`** - Database management operations
+- **`DELETE_DB`** - Database deletion (dangerous!)
 
 ```typescript
-// Manual flow
-const otpId = await client.auth.requestOTP('user@example.com', ['CREATE_DB']);
-// ... user receives email with OTP ...
-const tokens = await client.auth.verifyOTP('user@example.com', otpId, '123456');
+// Get token with specific scopes
+const token = await client.tokens.getAccessToken(['ACCESS_DB', 'GLOBAL_READ']);
 
-// Or use the convenience method
-const tokens = await client.auth.authenticateWithOTP(
-  'user@example.com',
-  async () => {
-    // Get OTP from user input, email service, etc.
-    return await promptForOTP();
-  },
-  ['CREATE_DB']
-);
+// Act on behalf of a user (requires IMPERSONATE scope)
+const userClient = await client.actAsUser('user123', 'user@example.com', 'User Name');
+const userTodos = await userClient.data.my.list('todoItems');
 ```
 
-### Database Operations
+### Data Endpoints
+
+#### Global Data (`/all` endpoint)
+
+Access all data in the database. Requires `GLOBAL_READ` scope for reading, `GLOBAL_WRITE` for modifications.
 
 ```typescript
-// Create database (requires CREATE_DB scope)
-const database = await client.databases.create(accessToken, {
-  timeZone: 'Europe/Stockholm',
-  hackathon: false,
+// List all items in a table
+const items = await client.data.all.list('todoItems');
+
+// Filter by properties
+const completedTodos = await client.data.all.list('todoItems', {
+  filters: { completed: true }
 });
 
-// Convenience method with auth
-const database = await client.createDatabase('user@example.com', getOTP);
+// Filter by realm
+const realmData = await client.data.all.list('todoItems', {
+  realmId: 'rlm-abc123',
+  filters: { priority: 'high' }
+});
+
+// Get single item by primary key
+const todo = await client.data.all.get('todoItems', 'todo-123');
+
+// Create/update data (upsert)
+await client.data.all.save('todoItems', [
+  { 
+    id: 'todo-456',
+    realmId: 'rlm-abc123', // Required for /all endpoint
+    title: 'Global Todo',
+    completed: false 
+  }
+]);
+
+// Delete by primary key
+await client.data.all.delete('todoItems', 'todo-456');
 ```
 
-### Health Monitoring
+#### User Data (`/my` endpoint)
+
+Access data accessible to the authenticated user. Requires `ACCESS_DB` scope.
 
 ```typescript
-// Quick checks
-const isHealthy = await client.health.health();
-const isReady = await client.health.ready();
+// List user's accessible data
+const myTodos = await client.data.my.list('todoItems');
 
-// Full status
-const status = await client.getStatus();
-console.log(status); // { healthy: true, ready: true }
+// Filter user's data
+const urgentTodos = await client.data.my.list('todoItems', {
+  filters: { priority: 'urgent', completed: false }
+});
 
-// Wait for service
-await client.waitForReady(60000); // Wait up to 60 seconds
+// Create user data (realmId defaults to user's private realm)
+await client.data.my.save('todoItems', {
+  title: 'Personal Todo',
+  completed: false,
+  dueDate: new Date('2026-12-31')
+});
 ```
 
-### Database-Specific Authentication
+#### Public Data (`/public` endpoint)
 
-For accessing an existing database:
+Access public data (realm `rlm-public`). No authentication required for reading.
 
 ```typescript
-const dbTokens = await client.auth.authenticateDatabase(
-  'https://dexie.cloud/db/abc123',
-  'user@example.com',
-  async () => await getOTPFromEmail()
-);
+// Read public data (no auth required)
+const publicItems = await client.data.public.list('products');
 
-// Use dbTokens.accessToken for database operations
+// Create public data (requires GLOBAL_WRITE scope)
+await client.data.public.save('products', {
+  name: 'New Product',
+  price: 29.99,
+  category: 'electronics'
+});
+```
+
+### User Management
+
+```typescript
+// List users with filtering and pagination
+const users = await client.users.list({
+  type: 'eval',              // Filter by user type
+  active: true,              // Only active users
+  search: 'john',            // Fuzzy search
+  sort: 'created',           // Sort by field
+  desc: true,                // Descending order
+  limit: 50,                 // Max results per page
+  pagingKey: 'abc123'        // For pagination
+});
+
+// Get single user
+const user = await client.users.get('user@example.com');
+
+// Create users
+await client.users.create([
+  {
+    userId: 'new-user@example.com',
+    type: 'eval',
+    evalDaysLeft: 30,
+    data: {
+      email: 'new-user@example.com',
+      displayName: 'New User'
+    }
+  }
+]);
+
+// Update users
+await client.users.update({
+  userId: 'user@example.com',
+  type: 'prod',
+  validUntil: '2026-12-31T23:59:59.999Z'
+});
+
+// Upgrade eval user to production
+await client.users.upgradeToProd('user@example.com', new Date('2027-01-01'));
+
+// Deactivate user (soft delete)
+await client.users.deactivate('user@example.com');
+
+// Extend evaluation period
+await client.users.extendEval('user@example.com', 15); // +15 days
 ```
 
 ## 🌍 Environment Support
@@ -122,8 +217,13 @@ const dbTokens = await client.auth.authenticateDatabase(
 <script type="module">
 import { DexieCloudClient } from 'https://unpkg.com/dexie-cloud-sdk/dist/index.esm.js';
 
-const client = new DexieCloudClient('https://dexie.cloud');
-// ... use client
+const client = new DexieCloudClient({
+  databaseUrl: 'https://abc123.dexie.cloud',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret'
+});
+
+const todos = await client.data.my.list('todoItems');
 </script>
 ```
 
@@ -131,18 +231,12 @@ const client = new DexieCloudClient('https://dexie.cloud');
 
 ```javascript
 const { DexieCloudClient } = require('dexie-cloud-sdk');
-// or
-import { DexieCloudClient } from 'dexie-cloud-sdk';
 
-const client = new DexieCloudClient('https://dexie.cloud');
-```
-
-### Deno
-
-```typescript
-import { DexieCloudClient } from 'https://unpkg.com/dexie-cloud-sdk/dist/index.esm.js';
-
-const client = new DexieCloudClient('https://dexie.cloud');
+const client = new DexieCloudClient({
+  databaseUrl: 'https://abc123.dexie.cloud',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret'
+});
 ```
 
 ### Cloudflare Workers
@@ -151,29 +245,56 @@ const client = new DexieCloudClient('https://dexie.cloud');
 import { DexieCloudClient } from 'dexie-cloud-sdk';
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const client = new DexieCloudClient('https://dexie.cloud');
-    // ... use client
+  async fetch(request: Request): Promise<Response> {
+    const client = new DexieCloudClient({
+      databaseUrl: 'https://abc123.dexie.cloud',
+      clientId: 'your-client-id',
+      clientSecret: 'your-client-secret'
+    });
+    
+    const data = await client.data.public.list('products');
+    return Response.json(data);
   }
 };
 ```
 
+## 🧠 TSON Support (Special Types)
+
+The SDK automatically handles TSON (TypeSON) serialization for special JavaScript types when `dreambase-library` is available:
+
+```typescript
+// Install TSON support
+import { TypesonSimplified, builtInTypeDefs } from 'dreambase-library';
+
+// Make TSON available globally
+globalThis.TSON = TypesonSimplified(builtInTypeDefs);
+
+// Now the SDK automatically handles Date, Blob, etc.
+await client.data.my.save('files', {
+  name: 'document.pdf',
+  content: new Blob([pdfData], { type: 'application/pdf' }),
+  uploadedAt: new Date(),
+  tags: new Set(['important', 'document'])
+});
+```
+
 ## 🛠️ Error Handling
 
-The SDK provides specific error types:
+The SDK provides specific error types for different scenarios:
 
 ```typescript
 import { 
-  DexieCloudError, 
-  DexieCloudAuthError, 
+  DexieCloudError,
+  DexieCloudAuthError,
   DexieCloudNetworkError 
 } from 'dexie-cloud-sdk';
 
 try {
-  const db = await client.createDatabase('user@example.com', getOTP);
+  const data = await client.data.all.list('todoItems');
 } catch (error) {
   if (error instanceof DexieCloudAuthError) {
     console.log('Authentication failed:', error.message);
+    console.log('Status code:', error.status);
   } else if (error instanceof DexieCloudNetworkError) {
     console.log('Network issue:', error.message);
   } else if (error instanceof DexieCloudError) {
@@ -182,26 +303,19 @@ try {
 }
 ```
 
-## 🧪 Testing Integration
+## ⚡ Legacy Support (Database Creation)
 
-Perfect for E2E testing with MailHog or similar email services:
+The SDK also supports legacy database creation flows for backward compatibility:
 
 ```typescript
-import { DexieCloudClient } from 'dexie-cloud-sdk';
+import { LegacyDexieCloudClient } from 'dexie-cloud-sdk';
 
-const client = new DexieCloudClient('http://localhost:3000');
+const client = new LegacyDexieCloudClient('https://dexie.cloud');
 
-// Wait for test server
-await client.waitForReady();
-
-// Create test database
-const database = await client.createDatabase('test@example.com', async () => {
-  // Fetch OTP from MailHog API
-  const response = await fetch('http://localhost:8025/api/v2/messages');
-  const emails = await response.json();
-  const otpEmail = emails.items[0];
-  const otp = extractOTPFromEmail(otpEmail.Content.Body);
-  return otp;
+// Create database with OTP authentication
+const database = await client.createDatabase('user@example.com', async () => {
+  // Return OTP from email
+  return await getOTPFromEmail();
 });
 ```
 
@@ -209,10 +323,11 @@ const database = await client.createDatabase('test@example.com', async () => {
 
 See the `/examples` directory for complete examples:
 
-- **Browser** - HTML + vanilla JS
-- **Node.js CLI** - Command-line database creator
-- **React App** - Full authentication flow
-- **Cloudflare Workers** - Edge database operations
+- **REST API Client** - Complete CRUD operations
+- **User Management** - User lifecycle management  
+- **Browser Integration** - Client-side usage
+- **Node.js Server** - Server-side operations
+- **Cloudflare Workers** - Edge computing
 
 ## 🤝 Contributing
 
@@ -230,5 +345,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Dexie.js](https://dexie.org) - The underlying database library
 - [Dexie Cloud](https://dexie.org/cloud) - Local-first sync service
-- [Documentation](https://dexie.org/docs) - Full Dexie documentation
+- [REST API Docs](https://dexie.org/docs/cloud/rest-api) - Complete API reference
 - [GitHub](https://github.com/dexie/dexie-cloud-sdk) - Source code
