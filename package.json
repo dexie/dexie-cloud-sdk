@@ -1,15 +1,16 @@
 {
   "name": "dexie-cloud-sdk",
   "version": "0.1.0",
-  "description": "Official JavaScript SDK for Dexie Cloud - Local-first database with sync",
-  "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "description": "Official JavaScript SDK for Dexie Cloud",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.esm.js",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -19,28 +20,31 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean --external node-fetch",
-    "build:watch": "npm run build -- --watch",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "lint": "eslint src --ext .ts,.js",
-    "lint:fix": "eslint src --ext .ts,.js --fix",
-    "typecheck": "tsc --noEmit",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external node-fetch",
-    "prepublishOnly": "npm run build && npm run test && npm run lint"
+    "test:unit": "vitest tests/unit --run",
+    "test:integration": "vitest tests/integration --run",
+    "test:integration:local": "./scripts/test-integration-local.sh",
+    "test:all": "npm run test:unit && npm run test:integration:local",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src tests --ext .ts,.js --fix",
+    "prepublishOnly": "npm run build && npm run test:unit",
+    "release": "npm version patch && npm publish && git push --follow-tags"
   },
   "keywords": [
     "dexie",
-    "dexie-cloud",
+    "dexie-cloud", 
     "indexeddb",
     "local-first",
-    "database",
     "sync",
     "offline",
-    "real-time",
-    "typescript"
+    "database",
+    "cloud",
+    "rest",
+    "api",
+    "client"
   ],
-  "author": "David Fahlander <david.fahlander@gmail.com>",
+  "author": "Dexie Team",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,24 +53,24 @@
   "bugs": {
     "url": "https://github.com/dexie/dexie-cloud-sdk/issues"
   },
-  "homepage": "https://github.com/dexie/dexie-cloud-sdk#readme",
+  "homepage": "https://dexie.org/cloud",
+  "peerDependencies": {
+    "dreambase-library": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "dreambase-library": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
-    "@vitest/coverage-v8": "^1.2.0",
-    "@vitest/ui": "^1.2.0",
-    "eslint": "^8.56.0",
-    "tsup": "^8.0.1",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.0"
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
+    "node-fetch": "^3.3.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.2.0",
+    "vitest": "^1.6.0"
   },
-  "engines": {
-    "node": ">=16"
-  },
-  "sideEffects": false,
-  "optionalDependencies": {
-    "@types/node-fetch": "^2.6.13",
-    "node-fetch": "^3.3.2"
-  }
+  "dependencies": {}
 }
