@@ -2,9 +2,9 @@
  * Unit tests for AuthManager
  */
 import { describe, it, expect, vi } from 'vitest';
-import { AuthManager } from '../src/auth.js';
-import { DexieCloudAuthError } from '../src/types.js';
-import { FetchAdapter } from '../src/adapters.js';
+import { AuthManager } from '../../src/auth.ts';
+import { DexieCloudAuthError } from '../../src/types.ts';
+import { FetchAdapter } from '../../src/adapters.ts';
 
 // Mock fetch
 const mockFetch = vi.fn();

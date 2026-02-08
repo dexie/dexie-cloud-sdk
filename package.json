@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.esm.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": [
@@ -18,7 +18,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external node-fetch",
     "build:watch": "npm run build -- --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -26,7 +26,7 @@
     "lint": "eslint src --ext .ts,.js",
     "lint:fix": "eslint src --ext .ts,.js --fix",
     "typecheck": "tsc --noEmit",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external node-fetch",
     "prepublishOnly": "npm run build && npm run test && npm run lint"
   },
   "keywords": [
@@ -64,5 +64,9 @@
   "engines": {
     "node": ">=16"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "optionalDependencies": {
+    "@types/node-fetch": "^2.6.13",
+    "node-fetch": "^3.3.2"
+  }
 }

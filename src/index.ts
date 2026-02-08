@@ -50,4 +50,4 @@ export {
 } from './adapters.js';
 
 // Default export for convenience
-export default DexieCloudClient;
+export { DexieCloudClient as default } from './client.js';

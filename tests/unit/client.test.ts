@@ -2,8 +2,8 @@
  * Unit tests for DexieCloudClient
  */
 import { describe, it, expect, vi } from 'vitest';
-import { DexieCloudClient } from '../src/client.js';
-import { DexieCloudError } from '../src/types.js';
+import { DexieCloudClient } from '../../src/client.ts';
+import { DexieCloudError } from '../../src/types.ts';
 
 // Mock fetch
 const mockFetch = vi.fn();
