@@ -1,10 +1,52 @@
 /**
  * Unit tests for AuthManager
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthManager } from '../../src/auth.ts';
 import { DexieCloudAuthError } from '../../src/types.ts';
 import { FetchAdapter } from '../../src/adapters.ts';
+
+// Helper to create a mock Response with both text() and json()
+function mockResponse(data: any, ok = true, status = 200): Response {
+  const text = JSON.stringify(data);
+  return {
+    ok,
+    status,
+    text: async () => text,
+    json: async () => data,
+    headers: new Headers(),
+    redirected: false,
+    statusText: ok ? 'OK' : 'Error',
+    type: 'basic',
+    url: '',
+    clone: () => mockResponse(data, ok, status),
+    body: null,
+    bodyUsed: false,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    blob: async () => new Blob(),
+    formData: async () => new FormData(),
+  } as Response;
+}
+
+function mockErrorResponse(errorText: string, status: number): Response {
+  return {
+    ok: false,
+    status,
+    text: async () => errorText,
+    json: async () => { throw new Error('Not JSON'); },
+    headers: new Headers(),
+    redirected: false,
+    statusText: 'Error',
+    type: 'basic',
+    url: '',
+    clone: () => mockErrorResponse(errorText, status),
+    body: null,
+    bodyUsed: false,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    blob: async () => new Blob(),
+    formData: async () => new FormData(),
+  } as Response;
+}
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -24,13 +66,10 @@ describe('AuthManager', () => {
 
   describe('requestOTP', () => {
     it('should request OTP successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: 'otp-sent',
-          otp_id: 'test-otp-id',
-        }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        type: 'otp-sent',
+        otp_id: 'test-otp-id',
+      }));
 
       const otpId = await auth.requestOTP('test@example.com');
 
@@ -49,11 +88,7 @@ describe('AuthManager', () => {
     });
 
     it('should throw auth error on failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: async () => 'Invalid email',
-      } as Response);
+      mockFetch.mockResolvedValueOnce(mockErrorResponse('Invalid email', 400));
 
       await expect(auth.requestOTP('invalid-email')).rejects.toThrow(
         DexieCloudAuthError
@@ -61,13 +96,10 @@ describe('AuthManager', () => {
     });
 
     it('should throw error on unexpected response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: 'tokens', // Wrong type
-          accessToken: 'token',
-        }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        type: 'tokens', // Wrong type
+        accessToken: 'token',
+      }));
 
       await expect(auth.requestOTP('test@example.com')).rejects.toThrow(
         DexieCloudAuthError
@@ -77,15 +109,12 @@ describe('AuthManager', () => {
 
   describe('verifyOTP', () => {
     it('should verify OTP successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: 'tokens',
-          accessToken: 'test-access-token',
-          refreshToken: 'test-refresh-token',
-          userId: 'test-user-id',
-        }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        type: 'tokens',
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
+        userId: 'test-user-id',
+      }));
 
       const tokens = await auth.verifyOTP(
         'test@example.com',
@@ -101,11 +130,7 @@ describe('AuthManager', () => {
     });
 
     it('should throw auth error on invalid OTP', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        text: async () => 'Invalid OTP',
-      } as Response);
+      mockFetch.mockResolvedValueOnce(mockErrorResponse('Invalid OTP', 401));
 
       await expect(
         auth.verifyOTP('test@example.com', 'test-otp-id', 'wrong')
@@ -116,22 +141,16 @@ describe('AuthManager', () => {
   describe('authenticateWithOTP', () => {
     it('should complete full OTP flow', async () => {
       // Mock OTP request
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: 'otp-sent',
-          otp_id: 'test-otp-id',
-        }),
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        type: 'otp-sent',
+        otp_id: 'test-otp-id',
+      }));
 
       // Mock OTP verification
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: 'tokens',
-          accessToken: 'test-access-token',
-        }),
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        type: 'tokens',
+        accessToken: 'test-access-token',
+      }));
 
       const tokens = await auth.authenticateWithOTP(
         'test@example.com',
