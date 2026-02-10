@@ -38,7 +38,8 @@
     "sync",
     "offline",
     "real-time",
-    "typescript"
+    "typescript",
+    "tson"
   ],
   "author": "David Fahlander <david.fahlander@gmail.com>",
   "license": "MIT",
@@ -50,6 +51,9 @@
     "url": "https://github.com/dexie/dexie-cloud-sdk/issues"
   },
   "homepage": "https://github.com/dexie/dexie-cloud-sdk#readme",
+  "dependencies": {
+    "dexie-cloud-common": "^1.0.58-tson.0"
+  },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",

@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { DexieCloudError } from './types.js';
 import type { HttpAdapter } from './adapters.js';
+import { parseResponse, stringifyBody } from './http-utils.js';
 
 export class DatabaseManager {
   constructor(
@@ -30,8 +31,9 @@ export class DatabaseManager {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      body: stringifyBody({
         timeZone: options.timeZone || 'UTC',
         ...(options.hackathon && { hackathon: true }),
       }),
@@ -45,8 +47,8 @@ export class DatabaseManager {
       );
     }
 
-    const data = await response.json() as DatabaseInfo;
-    if (!data.url) {
+    const data = await parseResponse<DatabaseInfo>(response);
+    if (!data?.url) {
       throw new DexieCloudError(`Invalid response: ${JSON.stringify(data)}`);
     }
 
