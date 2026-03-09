@@ -26,6 +26,8 @@ export { DexieCloudClient } from './client.js';
 export { AuthManager } from './auth.js';
 export { DatabaseManager } from './database.js';
 export { HealthManager } from './health.js';
+export { DataManager } from './data.js';
+export { BlobManager } from './blob.js';
 
 // TSON - Typed JSON serialization
 export { TSON, stringify, parse } from './tson.js';
@@ -41,6 +43,9 @@ export type {
   AuthTokens,
   DatabaseTokens,
   HealthStatus,
+  BlobHandling,
+  BlobRef,
+  InlineBlob,
 } from './types.js';
 
 // Errors
