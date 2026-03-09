@@ -1,9 +1,31 @@
 /**
  * Unit tests for DexieCloudClient
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DexieCloudClient } from '../../src/client.ts';
 import { DexieCloudError } from '../../src/types.ts';
+
+// Helper to create a mock Response with both text() and json()
+function mockResponse(data: any, ok = true, status = 200): Response {
+  const text = JSON.stringify(data);
+  return {
+    ok,
+    status,
+    text: async () => text,
+    json: async () => data,
+    headers: new Headers(),
+    redirected: false,
+    statusText: ok ? 'OK' : 'Error',
+    type: 'basic',
+    url: '',
+    clone: () => mockResponse(data, ok, status),
+    body: null,
+    bodyUsed: false,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    blob: async () => new Blob(),
+    formData: async () => new FormData(),
+  } as Response;
+}
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -82,32 +104,23 @@ describe('DexieCloudClient convenience methods', () => {
 
   it('should create database with OTP flow', async () => {
     // Mock OTP request
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        type: 'otp-sent',
-        otp_id: 'test-otp-id',
-      }),
-    } as Response);
+    mockFetch.mockResolvedValueOnce(mockResponse({
+      type: 'otp-sent',
+      otp_id: 'test-otp-id',
+    }));
 
     // Mock OTP verification
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        type: 'tokens',
-        accessToken: 'test-access-token',
-      }),
-    } as Response);
+    mockFetch.mockResolvedValueOnce(mockResponse({
+      type: 'tokens',
+      accessToken: 'test-access-token',
+    }));
 
     // Mock database creation
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        url: 'https://test.com/db/abc123',
-        clientId: 'test-client-id',
-        clientSecret: 'test-client-secret',
-      }),
-    } as Response);
+    mockFetch.mockResolvedValueOnce(mockResponse({
+      url: 'https://test.com/db/abc123',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+    }));
 
     const client = new DexieCloudClient('https://test.com');
     const result = await client.createDatabase(

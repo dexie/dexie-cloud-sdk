@@ -11,6 +11,7 @@ import type {
 } from './types.js';
 import { DexieCloudError, DexieCloudAuthError } from './types.js';
 import type { HttpAdapter } from './adapters.js';
+import { parseResponse, stringifyBody } from './http-utils.js';
 
 export class AuthManager {
   constructor(
@@ -29,7 +30,8 @@ export class AuthManager {
   async requestOTP(email: string, scopes: string[] = ['CREATE_DB']): Promise<string> {
     const response = await this.http.fetch(`${this.serviceUrl}/token`, {
       method: 'POST',
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json' },
+      body: stringifyBody({
         grant_type: 'otp',
         email,
         scopes,
@@ -44,7 +46,7 @@ export class AuthManager {
       );
     }
 
-    const data = await response.json() as TokenResponse;
+    const data = await parseResponse<TokenResponse>(response);
     if (data.type !== 'otp-sent' || !data.otp_id) {
       throw new DexieCloudAuthError(`Unexpected response: ${JSON.stringify(data)}`);
     }
@@ -63,7 +65,8 @@ export class AuthManager {
   ): Promise<AuthTokens> {
     const response = await this.http.fetch(`${this.serviceUrl}/token`, {
       method: 'POST',
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json' },
+      body: stringifyBody({
         grant_type: 'otp',
         email,
         scopes,
@@ -80,7 +83,7 @@ export class AuthManager {
       );
     }
 
-    const data = await response.json() as TokenResponse;
+    const data = await parseResponse<TokenResponse>(response);
     if (data.type !== 'tokens' || !data.accessToken) {
       throw new DexieCloudAuthError(`Unexpected response: ${JSON.stringify(data)}`);
     }
@@ -112,7 +115,8 @@ export class AuthManager {
   async requestDatabaseOTP(dbUrl: string, email: string): Promise<void> {
     const response = await this.http.fetch(`${dbUrl}/token`, {
       method: 'POST',
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json' },
+      body: stringifyBody({
         grant_type: 'otp-email',
         email,
       }),
@@ -137,7 +141,8 @@ export class AuthManager {
   ): Promise<DatabaseTokens> {
     const response = await this.http.fetch(`${dbUrl}/token`, {
       method: 'POST',
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json' },
+      body: stringifyBody({
         grant_type: 'otp-token',
         email,
         otp,
@@ -152,7 +157,7 @@ export class AuthManager {
       );
     }
 
-    return response.json();
+    return parseResponse<DatabaseTokens>(response);
   }
 
   /**
