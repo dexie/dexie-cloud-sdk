@@ -102,7 +102,7 @@ describe('BlobManager', () => {
       expect(ref).toBe('1:abc123');
     });
 
-    it('falls back to "1:{id}" when server returns empty body', async () => {
+    it('throws when server returns empty body (version cannot be determined)', async () => {
       const emptyResponse = {
         ok: true, status: 200, statusText: 'OK',
         text: async () => '',
@@ -117,8 +117,8 @@ describe('BlobManager', () => {
       } as Response;
       fetchMock.mockResolvedValue(emptyResponse);
 
-      const ref = await manager.upload(uint8([1]), TOKEN);
-      expect(ref).toMatch(/^1:[a-f0-9]+$/);
+      // Server returned no parseable ref — we cannot safely construct a version-prefixed ref
+      await expect(manager.upload(uint8([1]), TOKEN)).rejects.toThrow(DexieCloudError);
     });
 
     it('throws on upload error', async () => {
@@ -157,7 +157,11 @@ describe('BlobManager', () => {
     });
   });
 
-  describe('processForUpload (auto mode)', () => {
+describe('processForUpload (auto mode)', () => {
+    // Blobs must be >= BLOB_THRESHOLD (4096 bytes) to be offloaded.
+    // We create a base64 string representing 4096 zero bytes.
+    const bigB64 = btoa(String.fromCharCode(...new Array(4096).fill(0)));
+
     it('replaces inline blobs with BlobRefs', async () => {
       fetchMock.mockResolvedValue(mockJsonResponse({ ref: '1:uploaded' }));
 
@@ -165,7 +169,7 @@ describe('BlobManager', () => {
         name: 'test',
         avatar: {
           _bt: 'Blob',
-          v: btoa('fake-png-data'),
+          v: bigB64,
           ct: 'image/png',
         },
       };
@@ -185,7 +189,7 @@ describe('BlobManager', () => {
         nested: {
           deep: {
             _bt: 'Uint8Array',
-            v: btoa('data'),
+            v: bigB64,
           },
         },
       };
@@ -201,13 +205,20 @@ describe('BlobManager', () => {
         .mockResolvedValueOnce(mockJsonResponse({ ref: '1:second' }));
 
       const arr = [
-        { _bt: 'Blob', v: btoa('a') },
-        { _bt: 'Blob', v: btoa('b') },
+        { _bt: 'Blob', v: bigB64 },
+        { _bt: 'Blob', v: bigB64 },
       ];
 
       const result = await manager.processForUpload(arr, TOKEN);
       expect(result[0].ref).toBe('1:first');
       expect(result[1].ref).toBe('1:second');
+    });
+
+    it('keeps small blobs (< 4096 bytes) inline without uploading', async () => {
+      const smallObj = { _bt: 'Blob', v: btoa('tiny'), ct: 'image/png' };
+      const result = await manager.processForUpload(smallObj, TOKEN);
+      expect(result).toEqual(smallObj); // unchanged
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('passes through non-blob values unchanged', async () => {

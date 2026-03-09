@@ -43,8 +43,9 @@ export class DexieCloudClient {
 
     // Use dbUrl if provided, otherwise fall back to serviceUrl
     const dbUrl = fullConfig.dbUrl ?? fullConfig.serviceUrl;
-    this.data = new DataManager(dbUrl, this.http);
     this.blobs = new BlobManager(dbUrl, this.http, fullConfig.blobHandling ?? 'auto');
+    // Pass BlobManager to DataManager so create/get/list auto-process blobs
+    this.data = new DataManager(dbUrl, this.http, this.blobs);
   }
 
   /**

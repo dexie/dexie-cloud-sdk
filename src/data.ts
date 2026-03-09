@@ -3,9 +3,14 @@
  *
  * Provides CRUD operations against the Dexie Cloud REST API with
  * automatic TSON serialization/deserialization.
+ *
+ * Blob integration: if a BlobManager is provided, create() will
+ * automatically call processForUpload before sending, and get()/list()
+ * will call processForRead on the response.
  */
 
 import type { HttpAdapter } from './adapters.js';
+import type { BlobManager } from './blob.js';
 import { DexieCloudError } from './types.js';
 import { parseResponse, stringifyBody } from './http-utils.js';
 
@@ -22,10 +27,16 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export class DataManager {
-  constructor(private dbUrl: string, private http: HttpAdapter) {}
+  constructor(
+    private dbUrl: string,
+    private http: HttpAdapter,
+    private blobManager?: BlobManager
+  ) {}
 
   /**
    * List all objects in a table, optionally filtered by realm.
+   * BlobRefs in results are automatically resolved to inline data
+   * when a BlobManager is present.
    */
   async list(table: string, token: string, options?: { realm?: string }): Promise<any[]> {
     let url = `${this.dbUrl}/${encodeURIComponent(table)}`;
@@ -37,12 +48,17 @@ export class DataManager {
       headers: { Authorization: `Bearer ${token}` },
     });
     const result = await handleResponse<any>(response);
-    // Server may return array directly or wrapped
-    return Array.isArray(result) ? result : result?.data ?? result ?? [];
+    const items: any[] = Array.isArray(result) ? result : result?.data ?? result ?? [];
+    if (this.blobManager) {
+      return Promise.all(items.map((item) => this.blobManager!.processForRead(item, token)));
+    }
+    return items;
   }
 
   /**
    * Get a single object by id.
+   * BlobRefs in the result are automatically resolved to inline data
+   * when a BlobManager is present.
    */
   async get(table: string, id: string, token: string): Promise<any> {
     const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
@@ -50,29 +66,46 @@ export class DataManager {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}` },
     });
-    return handleResponse<any>(response);
+    const result = await handleResponse<any>(response);
+    if (this.blobManager) {
+      return this.blobManager.processForRead(result, token);
+    }
+    return result;
   }
 
   /**
    * Create an object in a table.
+   * Inline blobs in obj are automatically uploaded and replaced with
+   * BlobRefs when a BlobManager is present.
    */
   async create(table: string, obj: any, token: string): Promise<any> {
     const url = `${this.dbUrl}/${encodeURIComponent(table)}`;
+    const body = this.blobManager
+      ? await this.blobManager.processForUpload(obj, token)
+      : obj;
     const response = await this.http.fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: stringifyBody(obj),
+      body: stringifyBody(body),
     });
     return handleResponse<any>(response);
   }
 
   /**
-   * Update (replace) an object by id.
+   * Replace (full update) an object by id using HTTP PUT.
+   *
+   * NOTE: This sends the complete object as a full replacement (PUT semantics).
+   * All fields not included in `obj` will be removed on the server.
+   * If you want partial updates, use a PATCH-based approach when the server
+   * supports it (not currently exposed here).
+   *
+   * Previously named `update()` — `update` is kept as an alias for backwards
+   * compatibility but may be deprecated in a future release.
    */
-  async update(table: string, id: string, obj: any, token: string): Promise<any> {
+  async replace(table: string, id: string, obj: any, token: string): Promise<any> {
     const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
     const response = await this.http.fetch(url, {
       method: 'PUT',
@@ -83,6 +116,15 @@ export class DataManager {
       body: stringifyBody(obj),
     });
     return handleResponse<any>(response);
+  }
+
+  /**
+   * @deprecated Use `replace()` instead. This method performs a full object
+   * replacement (HTTP PUT), not a partial update (PATCH). The name `update`
+   * is misleading and kept only for backwards compatibility.
+   */
+  update(table: string, id: string, obj: any, token: string): Promise<any> {
+    return this.replace(table, id, obj, token);
   }
 
   /**
@@ -105,13 +147,10 @@ export class DataManager {
   }
 
   /**
-   * Bulk create objects in a table (sequential).
+   * Bulk create objects in a table in parallel.
+   * All requests are sent concurrently via Promise.all.
    */
   async bulkCreate(table: string, objects: any[], token: string): Promise<any[]> {
-    const results: any[] = [];
-    for (const obj of objects) {
-      results.push(await this.create(table, obj, token));
-    }
-    return results;
+    return Promise.all(objects.map((obj) => this.create(table, obj, token)));
   }
 }

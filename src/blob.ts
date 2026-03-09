@@ -9,26 +9,55 @@ import type { HttpAdapter } from './adapters.js';
 import type { BlobHandling, BlobRef } from './types.js';
 import { DexieCloudError } from './types.js';
 
+/**
+ * Minimum byte size for offloading a binary to blob storage.
+ * Binaries smaller than this threshold are kept inline (as base64).
+ * Must match the server-side threshold.
+ */
+export const BLOB_THRESHOLD = 4096;
+
+/**
+ * Maximum number of concurrent blob downloads in _walkForRead.
+ * Mirrors the client-side MAX_CONCURRENT pattern.
+ */
+const MAX_CONCURRENT_DOWNLOADS = 6;
+
 /** Generate a unique blob ID */
 function generateBlobId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID().replace(/-/g, '');
   }
-  // Fallback: timestamp + random hex
-  return Date.now().toString(16) + Math.random().toString(16).slice(2);
+  // Fallback: use getRandomValues for strong entropy
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  // Last resort (non-browser, non-Node env): still better than Math.random alone
+  const ts = Date.now().toString(16);
+  const rand = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  return ts + rand;
 }
 
-/** Convert Blob/ArrayBuffer/TypedArray to Uint8Array */
-async function toUint8Array(data: Uint8Array | Blob | ArrayBuffer): Promise<Uint8Array> {
+/**
+ * Convert Blob/ArrayBuffer/TypedArray/DataView to Uint8Array.
+ * Accepts any ArrayBufferView (TypedArrays + DataView) as well as
+ * Uint8Array, ArrayBuffer, and Blob.
+ */
+async function toUint8Array(
+  data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView
+): Promise<Uint8Array> {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   if (typeof Blob !== 'undefined' && data instanceof Blob) {
     const buf = await data.arrayBuffer();
     return new Uint8Array(buf);
   }
-  // TypedArray (e.g. Int8Array, etc.)
+  // Handles all TypedArrays (Int8Array, Float32Array, etc.) and DataView
   if (ArrayBuffer.isView(data)) {
-    return new Uint8Array((data as ArrayBufferView).buffer);
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
   throw new TypeError('Unsupported data type for blob upload');
 }
@@ -92,7 +121,7 @@ export class BlobManager {
    * Returns the blob ref (e.g. "1:abc123...").
    */
   async upload(
-    data: Uint8Array | Blob | ArrayBuffer,
+    data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView,
     token: string,
     contentType = 'application/octet-stream'
   ): Promise<string> {
@@ -125,14 +154,20 @@ export class BlobManager {
         const parsed = JSON.parse(text);
         if (parsed?.ref) return parsed.ref as string;
       } catch {
-        // ignore parse errors, construct ref ourselves
+        // ignore parse errors, fall through
       }
       // If server returned "version:blobId" directly
       if (text.includes(':')) return text.trim();
     }
 
-    // Fallback: assume version 1
-    return `1:${blobId}`;
+    // Server response was unparseable — we cannot safely construct a ref
+    // because we don't know the server-assigned version.
+    throw new DexieCloudError(
+      `Blob upload succeeded (HTTP ${response.status}) but server returned no parseable ref. ` +
+        `Cannot construct a safe blob reference without the server-assigned version.`,
+      response.status,
+      text
+    );
   }
 
   /**
@@ -160,8 +195,9 @@ export class BlobManager {
   }
 
   /**
-   * Process an object before uploading: find inline blobs, upload them,
-   * replace with BlobRefs. Only active in 'auto' mode.
+   * Process an object before uploading: find inline blobs large enough to
+   * offload (≥ BLOB_THRESHOLD bytes), upload them, replace with BlobRefs.
+   * Small binaries are left inline. Only active in 'auto' mode.
    */
   async processForUpload(obj: any, token: string): Promise<any> {
     if (this.mode !== 'auto') return obj;
@@ -179,8 +215,13 @@ export class BlobManager {
 
   private async _walkForUpload(val: any, token: string): Promise<any> {
     if (isInlineBlob(val)) {
-      // Upload inline blob, replace with BlobRef
       const bytes = base64ToUint8Array(val.v);
+      // Only offload to blob storage if the binary meets the size threshold.
+      // Small binaries are cheaper to keep inline than to round-trip through
+      // the blob endpoint.
+      if (bytes.length < BLOB_THRESHOLD) {
+        return val; // keep as-is
+      }
       const contentType = val.ct ?? 'application/octet-stream';
       const ref = await this.upload(bytes, token, contentType);
       const blobRef: BlobRef = {
@@ -193,19 +234,14 @@ export class BlobManager {
     }
 
     if (Array.isArray(val)) {
-      const results: any[] = [];
-      for (const item of val) {
-        results.push(await this._walkForUpload(item, token));
-      }
-      return results;
+      return Promise.all(val.map((item) => this._walkForUpload(item, token)));
     }
 
     if (val !== null && typeof val === 'object') {
-      const result: Record<string, any> = {};
-      for (const [k, v] of Object.entries(val)) {
-        result[k] = await this._walkForUpload(v, token);
-      }
-      return result;
+      const entries = await Promise.all(
+        Object.entries(val).map(async ([k, v]) => [k, await this._walkForUpload(v, token)] as const)
+      );
+      return Object.fromEntries(entries);
     }
 
     return val;
@@ -213,7 +249,6 @@ export class BlobManager {
 
   private async _walkForRead(val: any, token: string): Promise<any> {
     if (isBlobRef(val)) {
-      // Download and replace with inline
       const { data, contentType } = await this.download(val.ref, token);
       return {
         _bt: val._bt,
@@ -223,21 +258,48 @@ export class BlobManager {
     }
 
     if (Array.isArray(val)) {
-      const results: any[] = [];
-      for (const item of val) {
-        results.push(await this._walkForRead(item, token));
-      }
-      return results;
+      // Download up to MAX_CONCURRENT_DOWNLOADS blobs in parallel
+      return this._parallelMap(val, (item) => this._walkForRead(item, token));
     }
 
     if (val !== null && typeof val === 'object') {
+      const keys = Object.keys(val);
+      const resolvedValues = await this._parallelMap(
+        keys,
+        (k) => this._walkForRead(val[k], token)
+      );
       const result: Record<string, any> = {};
-      for (const [k, v] of Object.entries(val)) {
-        result[k] = await this._walkForRead(v, token);
+      for (let i = 0; i < keys.length; i++) {
+        result[keys[i]!] = resolvedValues[i];
       }
       return result;
     }
 
     return val;
+  }
+
+  /**
+   * Like Promise.all but with a concurrency cap.
+   */
+  private async _parallelMap<T, R>(
+    items: T[],
+    fn: (item: T) => Promise<R>
+  ): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+
+    async function worker() {
+      while (index < items.length) {
+        const i = index++;
+        results[i] = await fn(items[i]!);
+      }
+    }
+
+    const workers = Array.from(
+      { length: Math.min(MAX_CONCURRENT_DOWNLOADS, items.length) },
+      () => worker()
+    );
+    await Promise.all(workers);
+    return results;
   }
 }
