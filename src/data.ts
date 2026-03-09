@@ -50,7 +50,13 @@ export class DataManager {
     const result = await handleResponse<any>(response);
     const items: any[] = Array.isArray(result) ? result : result?.data ?? result ?? [];
     if (this.blobManager) {
-      return Promise.all(items.map((item) => this.blobManager!.processForRead(item, token)));
+      // Process items sequentially to avoid unbounded parallel downloads.
+      // Each item already uses internal parallelism (MAX_CONCURRENT=6) for its blobs.
+      const resolved: any[] = [];
+      for (const item of items) {
+        resolved.push(await this.blobManager.processForRead(item, token));
+      }
+      return resolved;
     }
     return items;
   }
@@ -107,13 +113,16 @@ export class DataManager {
    */
   async replace(table: string, id: string, obj: any, token: string): Promise<any> {
     const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
+    const body = this.blobManager
+      ? await this.blobManager.processForUpload(obj, token)
+      : obj;
     const response = await this.http.fetch(url, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: stringifyBody(obj),
+      body: stringifyBody(body),
     });
     return handleResponse<any>(response);
   }
@@ -149,6 +158,9 @@ export class DataManager {
   /**
    * Bulk create objects in a table in parallel.
    * All requests are sent concurrently via Promise.all.
+   *
+   * NOTE: This is NOT atomic — if one create fails, others may have already
+   * succeeded on the server. There is no rollback for partial failures.
    */
   async bulkCreate(table: string, objects: any[], token: string): Promise<any[]> {
     return Promise.all(objects.map((obj) => this.create(table, obj, token)));
