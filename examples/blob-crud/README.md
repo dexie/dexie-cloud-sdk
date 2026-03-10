@@ -1,20 +1,23 @@
-# Dexie Cloud SDK Example
+# Dexie Cloud SDK — Blob CRUD Example
 
-A Node.js example showing how to use the Dexie Cloud SDK for server-side data operations with blob support.
+Server-side data operations with blob support using client credentials.
 
 ## What It Shows
 
-- Authenticating with OTP
+- Authenticating with client credentials (`clientId`/`clientSecret`)
 - CRUD operations via REST API
 - Uploading and downloading blobs
-- Auto vs lazy blob handling modes
+- Auto blob handling mode
 
 ## Run
 
 ```bash
 npm install
-# Set your database URL:
+
+# Credentials from your dexie-cloud.key file:
 export DEXIE_CLOUD_DB_URL=https://xxxxxxxx.dexie.cloud
-export DEXIE_CLOUD_EMAIL=your@email.com
+export DEXIE_CLOUD_CLIENT_ID=your-client-id
+export DEXIE_CLOUD_CLIENT_SECRET=your-client-secret
+
 npm start
 ```

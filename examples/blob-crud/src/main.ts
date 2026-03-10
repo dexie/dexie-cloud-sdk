@@ -2,51 +2,45 @@
  * Dexie Cloud SDK — Blob CRUD Example
  * 
  * Demonstrates server-side data operations with blob offloading.
+ * Uses client credentials (clientId/clientSecret from dexie-cloud.key).
  */
 
 import { DexieCloudClient } from 'dexie-cloud-sdk';
 import * as fs from 'fs';
-import * as readline from 'readline/promises';
 
+// Read credentials from dexie-cloud.key or environment
 const DB_URL = process.env.DEXIE_CLOUD_DB_URL;
-const EMAIL = process.env.DEXIE_CLOUD_EMAIL;
+const CLIENT_ID = process.env.DEXIE_CLOUD_CLIENT_ID;
+const CLIENT_SECRET = process.env.DEXIE_CLOUD_CLIENT_SECRET;
 
-if (!DB_URL || !EMAIL) {
-  console.error('Set DEXIE_CLOUD_DB_URL and DEXIE_CLOUD_EMAIL environment variables');
+if (!DB_URL || !CLIENT_ID || !CLIENT_SECRET) {
+  console.error(`Set environment variables:
+  DEXIE_CLOUD_DB_URL     — Your database URL (from dexie-cloud.key)
+  DEXIE_CLOUD_CLIENT_ID  — Client ID (from dexie-cloud.key)
+  DEXIE_CLOUD_CLIENT_SECRET — Client secret (from dexie-cloud.key)
+  
+Or source your dexie-cloud.key file directly.`);
   process.exit(1);
 }
 
 async function main() {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  
   // --- Initialize SDK ---
   
   const client = new DexieCloudClient({
-    serviceUrl: 'https://dexie.cloud',
     dbUrl: DB_URL,
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
     blobHandling: 'auto'  // Binary data handled transparently
   });
 
-  console.log('🔑 Authenticating...');
-  
-  // --- Authenticate ---
-  
-  const { accessToken } = await client.auth.authenticateWithOTP(
-    EMAIL,
-    async () => {
-      const otp = await rl.question('Enter OTP from email: ');
-      return otp.trim();
-    },
-    ['ACCESS_DB']
-  );
-  
+  console.log('🔑 Authenticating with client credentials...');
+  const accessToken = await client.auth.getToken(['ACCESS_DB', 'GLOBAL_WRITE']);
   console.log('✅ Authenticated!\n');
 
   // --- Create item with binary data ---
   
   console.log('📝 Creating item with binary data...');
   
-  // Create a sample image (or read from file)
   const imageData = new Uint8Array(1024);
   crypto.getRandomValues(imageData);  // Random bytes for demo
   
@@ -92,8 +86,6 @@ async function main() {
   console.log('🗑️ Cleaning up...');
   await client.data.delete('files', item.id, accessToken);
   console.log('✅ Done!\n');
-
-  rl.close();
 }
 
 main().catch(err => {
