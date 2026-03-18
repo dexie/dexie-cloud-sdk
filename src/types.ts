@@ -18,6 +18,13 @@ export interface DexieCloudConfig {
 
   /** Blob handling mode: 'auto' (default) or 'lazy' */
   blobHandling?: BlobHandling;
+
+  /** Maximum string length before offloading to blob storage.
+   * Strings longer than this are uploaded as blobs during write.
+   * Set to Infinity to disable string offloading.
+   * @default 32768
+   */
+  maxStringLength?: number;
   
   /** Optional custom fetch implementation */
   fetch?: typeof globalThis.fetch;

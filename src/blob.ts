@@ -109,11 +109,15 @@ function uint8ArrayToBase64(data: Uint8Array): string {
   return btoa(binary);
 }
 
+/** Default max string length before offloading */
+export const DEFAULT_MAX_STRING_LENGTH = 32768;
+
 export class BlobManager {
   constructor(
     private dbUrl: string,
     private http: HttpAdapter,
-    private mode: BlobHandling = 'auto'
+    private mode: BlobHandling = 'auto',
+    private maxStringLength: number = DEFAULT_MAX_STRING_LENGTH
   ) {}
 
   /**
@@ -214,6 +218,13 @@ export class BlobManager {
   }
 
   private async _walkForUpload(val: any, token: string): Promise<any> {
+    // Check long strings
+    if (typeof val === 'string' && val.length > this.maxStringLength && this.maxStringLength !== Infinity) {
+      const bytes = new TextEncoder().encode(val);
+      const ref = await this.upload(bytes, token, 'text/plain;charset=utf-8');
+      return { _bt: 'string', ref, size: bytes.length } as BlobRef;
+    }
+
     if (isInlineBlob(val)) {
       const bytes = base64ToUint8Array(val.v);
       // Only offload to blob storage if the binary meets the size threshold.
@@ -249,6 +260,11 @@ export class BlobManager {
 
   private async _walkForRead(val: any, token: string): Promise<any> {
     if (isBlobRef(val)) {
+      // String type: download and decode UTF-8 back to string
+      if (val._bt === 'string') {
+        const { data } = await this.download(val.ref, token);
+        return new TextDecoder().decode(data);
+      }
       const { data, contentType } = await this.download(val.ref, token);
       return {
         _bt: val._bt,
