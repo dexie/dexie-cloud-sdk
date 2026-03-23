@@ -28,6 +28,7 @@ export { DatabaseManager } from './database.js';
 export { HealthManager } from './health.js';
 export { DataManager } from './data.js';
 export { BlobManager } from './blob.js';
+export { DatabaseSession } from './DatabaseSession.js';
 
 // TSON - Typed JSON serialization
 export { TSON, stringify, parse } from './tson.js';
@@ -47,6 +48,13 @@ export type {
   BlobRef,
   InlineBlob,
 } from './types.js';
+
+export type {
+  DatabaseCredentials,
+  ImpersonateClaims,
+  DataSessionProxy,
+  BlobSessionProxy,
+} from './DatabaseSession.js';
 
 // Errors
 export {

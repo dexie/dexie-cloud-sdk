@@ -9,6 +9,7 @@ import { DatabaseManager } from './database.js';
 import { HealthManager } from './health.js';
 import { DataManager } from './data.js';
 import { BlobManager } from './blob.js';
+import { DatabaseSession, type DatabaseCredentials } from './DatabaseSession.js';
 
 export class DexieCloudClient {
   public readonly auth: AuthManager;
@@ -75,5 +76,27 @@ export class DexieCloudClient {
   /** Convenience: Wait for service to be ready */
   async waitForReady(timeout?: number): Promise<void> {
     return this.health.waitForReady(timeout);
+  }
+
+  /**
+   * Create a pre-authenticated DatabaseSession for a specific database.
+   *
+   * Tokens are acquired lazily and cached in-memory. When a token is
+   * within 5 minutes of expiry a fresh one is fetched transparently.
+   *
+   * @example
+   * ```ts
+   * const db = client.db('https://xxxxxxxx.dexie.cloud', {
+   *   clientId: '...',
+   *   clientSecret: '...',
+   * });
+   * const items = await db.data.list('todoItems');
+   * ```
+   */
+  db(dbUrl: string, credentials: DatabaseCredentials): DatabaseSession {
+    const normalizedUrl = dbUrl.replace(/\/$/, '');
+    const blobManager = new BlobManager(normalizedUrl, this.http);
+    const dataManager = new DataManager(normalizedUrl, this.http, blobManager);
+    return new DatabaseSession(normalizedUrl, credentials, this.http, blobManager, dataManager);
   }
 }
