@@ -87,7 +87,7 @@ describe('BlobManager', () => {
       fetchMock.mockResolvedValue(mockJsonResponse({ ref: '1:abc123' }));
 
       const data = uint8([1, 2, 3]);
-      const ref = await manager.upload(data, TOKEN, 'image/png');
+      const ref = await manager.upload(data, 'image/png', TOKEN);
 
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringMatching(`${DB_URL}/blob/`),
@@ -118,18 +118,18 @@ describe('BlobManager', () => {
       fetchMock.mockResolvedValue(emptyResponse);
 
       // Server returned no parseable ref — we cannot safely construct a version-prefixed ref
-      await expect(manager.upload(uint8([1]), TOKEN)).rejects.toThrow(DexieCloudError);
+      await expect(manager.upload(uint8([1]), 'application/octet-stream', TOKEN)).rejects.toThrow(DexieCloudError);
     });
 
     it('throws on upload error', async () => {
       fetchMock.mockResolvedValue(mockErrorResponse('Unauthorized', 401));
-      await expect(manager.upload(uint8([1]), TOKEN)).rejects.toThrow(DexieCloudError);
+      await expect(manager.upload(uint8([1]), 'application/octet-stream', TOKEN)).rejects.toThrow(DexieCloudError);
     });
 
     it('accepts ArrayBuffer input', async () => {
       fetchMock.mockResolvedValue(mockJsonResponse({ ref: '1:xyz' }));
       const buf = new ArrayBuffer(4);
-      await expect(manager.upload(buf, TOKEN)).resolves.toBeDefined();
+      await expect(manager.upload(buf, 'application/octet-stream', TOKEN)).resolves.toBeDefined();
     });
   });
 

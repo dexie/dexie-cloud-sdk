@@ -96,7 +96,8 @@ export class DexieCloudClient {
   db(dbUrl: string, credentials: DatabaseCredentials): DatabaseSession {
     const normalizedUrl = dbUrl.replace(/\/$/, '');
     const blobManager = new BlobManager(normalizedUrl, this.http);
-    const dataManager = new DataManager(normalizedUrl, this.http, blobManager);
+    const access = credentials.impersonate ? 'my' : 'all';
+    const dataManager = new DataManager(normalizedUrl, this.http, blobManager, access);
     return new DatabaseSession(normalizedUrl, credentials, this.http, blobManager, dataManager);
   }
 }

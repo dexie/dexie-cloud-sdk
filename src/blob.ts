@@ -126,8 +126,8 @@ export class BlobManager {
    */
   async upload(
     data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView,
+    contentType: string = 'application/octet-stream',
     token: string,
-    contentType = 'application/octet-stream'
   ): Promise<string> {
     const blobId = generateBlobId();
     const url = `${this.dbUrl}/blob/${blobId}`;
@@ -221,7 +221,7 @@ export class BlobManager {
     // Check long strings
     if (typeof val === 'string' && val.length > this.maxStringLength && this.maxStringLength !== Infinity) {
       const bytes = new TextEncoder().encode(val);
-      const ref = await this.upload(bytes, token, 'text/plain;charset=utf-8');
+      const ref = await this.upload(bytes, 'text/plain;charset=utf-8', token);
       return { _bt: 'string', ref, size: bytes.length } as BlobRef;
     }
 
@@ -234,7 +234,7 @@ export class BlobManager {
         return val; // keep as-is
       }
       const contentType = val.ct ?? 'application/octet-stream';
-      const ref = await this.upload(bytes, token, contentType);
+      const ref = await this.upload(bytes, contentType, token);
       const blobRef: BlobRef = {
         _bt: val._bt,
         ref,

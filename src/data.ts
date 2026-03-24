@@ -26,12 +26,23 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return parseResponse<T>(response);
 }
 
+export type DataAccess = 'my' | 'all' | 'public';
+
 export class DataManager {
   constructor(
     private dbUrl: string,
     private http: HttpAdapter,
-    private blobManager?: BlobManager
+    private blobManager?: BlobManager,
+    private access: DataAccess = 'my'
   ) {}
+
+  private tableUrl(table: string): string {
+    return `${this.dbUrl}/${this.access}/${encodeURIComponent(table)}`;
+  }
+
+  private itemUrl(table: string, id: string): string {
+    return `${this.dbUrl}/${this.access}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
+  }
 
   /**
    * List all objects in a table, optionally filtered by realm.
@@ -39,7 +50,7 @@ export class DataManager {
    * when a BlobManager is present.
    */
   async list(table: string, token: string, options?: { realm?: string }): Promise<any[]> {
-    let url = `${this.dbUrl}/${encodeURIComponent(table)}`;
+    let url = this.tableUrl(table);
     if (options?.realm) {
       url += `?realm=${encodeURIComponent(options.realm)}`;
     }
@@ -67,7 +78,7 @@ export class DataManager {
    * when a BlobManager is present.
    */
   async get(table: string, id: string, token: string): Promise<any> {
-    const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
+    const url = this.itemUrl(table, id);
     const response = await this.http.fetch(url, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}` },
@@ -84,8 +95,8 @@ export class DataManager {
    * Inline blobs in obj are automatically uploaded and replaced with
    * BlobRefs when a BlobManager is present.
    */
-  async create(table: string, obj: any, token: string): Promise<any> {
-    const url = `${this.dbUrl}/${encodeURIComponent(table)}`;
+  async create(table: string, obj: any, token: string): Promise<{ id: string }> {
+    const url = this.tableUrl(table);
     const body = this.blobManager
       ? await this.blobManager.processForUpload(obj, token)
       : obj;
@@ -97,7 +108,10 @@ export class DataManager {
       },
       body: stringifyBody(body),
     });
-    return handleResponse<any>(response);
+    // Server returns an array of keys e.g. ["abc123"] or [["realmId","name"]]
+    const keys = await handleResponse<string[]>(response);
+    const id = Array.isArray(keys) ? keys[0] : keys;
+    return { id: typeof id === 'string' ? id : JSON.stringify(id) };
   }
 
   /**
@@ -111,20 +125,25 @@ export class DataManager {
    * Previously named `update()` — `update` is kept as an alias for backwards
    * compatibility but may be deprecated in a future release.
    */
-  async replace(table: string, id: string, obj: any, token: string): Promise<any> {
-    const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
+  async replace(table: string, id: string, obj: any, token: string): Promise<{ id: string }> {
+    // Dexie Cloud REST API uses POST for both create and upsert (no PUT endpoint).
+    // Include the primary key in the object body so the server treats this as an upsert.
+    const url = this.tableUrl(table);
+    const merged = { ...obj, id };
     const body = this.blobManager
-      ? await this.blobManager.processForUpload(obj, token)
-      : obj;
+      ? await this.blobManager.processForUpload(merged, token)
+      : merged;
     const response = await this.http.fetch(url, {
-      method: 'PUT',
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: stringifyBody(body),
     });
-    return handleResponse<any>(response);
+    const keys = await handleResponse<string[]>(response);
+    const returnedId = Array.isArray(keys) ? keys[0] : keys;
+    return { id: typeof returnedId === 'string' ? returnedId : JSON.stringify(returnedId) };
   }
 
   /**
@@ -140,7 +159,7 @@ export class DataManager {
    * Delete an object by id.
    */
   async delete(table: string, id: string, token: string): Promise<void> {
-    const url = `${this.dbUrl}/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
+    const url = this.itemUrl(table, id);
     const response = await this.http.fetch(url, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },

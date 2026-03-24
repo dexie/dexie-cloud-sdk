@@ -11,7 +11,9 @@ services:
       POSTGRES_PASSWORD: testpass123
       POSTGRES_DB: dexiecloud
     ports:
-      - "5438:5432"
+      - "5439:5432"
+    volumes:
+      - ../dexie-cloud/libs/dexie-cloud-server/sql/create-schema.pgsql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dexiecloud -d dexiecloud"]
       interval: 3s
@@ -23,13 +25,16 @@ services:
   mailhog:
     image: mailhog/mailhog:latest
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "1026:1025"
+      - "8026:8025"
     networks:
       - sdk-test
 
   dexie-cloud-server:
-    image: dexie/dexie-cloud-server:beta
+    build:
+      context: ../dexie-cloud/libs/dexie-cloud-server
+      dockerfile: Dockerfile
+    command: ["node", "dexie-cloud-server.js"]
     environment:
       POSTGRESQLCONNSTR_DEXIE_CLOUD: postgresql://dexiecloud:testpass123@postgres:5432/dexiecloud
       JWT_SECRET: e2e-test-jwt-secret-key-12345
@@ -45,7 +50,7 @@ services:
       PORT: 3000
       DB_SECRET: e2e-test-db-secret-key-12345-for-blob-storage
     ports:
-      - "3000:3000"
+      - "3001:3000"
     depends_on:
       postgres:
         condition: service_healthy

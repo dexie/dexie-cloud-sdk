@@ -66,7 +66,7 @@ describe('DataManager', () => {
       const result = await manager.list('users', TOKEN);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users`,
+        `${DB_URL}/my/users`,
         expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) })
       );
       expect(result).toEqual(items);
@@ -76,7 +76,7 @@ describe('DataManager', () => {
       fetchMock.mockResolvedValue(mockResponse([]));
       await manager.list('users', TOKEN, { realm: 'realm123' });
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users?realm=realm123`,
+        `${DB_URL}/my/users?realm=realm123`,
         expect.anything()
       );
     });
@@ -95,7 +95,7 @@ describe('DataManager', () => {
       const result = await manager.get('users', '42', TOKEN);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users/42`,
+        `${DB_URL}/my/users/42`,
         expect.objectContaining({ method: 'GET' })
       );
       expect(result).toEqual(item);
@@ -110,31 +110,30 @@ describe('DataManager', () => {
   describe('create', () => {
     it('POSTs to /{table} with body', async () => {
       const obj = { name: 'Alice' };
-      const created = { id: 'new-id', ...obj };
-      fetchMock.mockResolvedValue(mockResponse(created));
+      fetchMock.mockResolvedValue(mockResponse(['new-id']));
 
       const result = await manager.create('users', obj, TOKEN);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users`,
+        `${DB_URL}/my/users`,
         expect.objectContaining({ method: 'POST' })
       );
-      expect(result).toEqual(created);
+      expect(result).toEqual({ id: 'new-id' });
     });
   });
 
   describe('update', () => {
-    it('PUTs to /{table}/{id} with body', async () => {
+    it('POSTs to /{table} (upsert) with id in body', async () => {
       const obj = { id: '42', name: 'Updated' };
-      fetchMock.mockResolvedValue(mockResponse(obj));
+      fetchMock.mockResolvedValue(mockResponse(['42']));
 
       const result = await manager.update('users', '42', obj, TOKEN);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users/42`,
-        expect.objectContaining({ method: 'PUT' })
+        `${DB_URL}/my/users`,
+        expect.objectContaining({ method: 'POST' })
       );
-      expect(result).toEqual(obj);
+      expect(result).toEqual({ id: '42' });
     });
   });
 
@@ -144,7 +143,7 @@ describe('DataManager', () => {
 
       await expect(manager.delete('users', '42', TOKEN)).resolves.toBeUndefined();
       expect(fetchMock).toHaveBeenCalledWith(
-        `${DB_URL}/users/42`,
+        `${DB_URL}/my/users/42`,
         expect.objectContaining({ method: 'DELETE' })
       );
     });
@@ -159,15 +158,15 @@ describe('DataManager', () => {
     it('creates each object sequentially', async () => {
       const objects = [{ name: 'Alice' }, { name: 'Bob' }];
       fetchMock
-        .mockResolvedValueOnce(mockResponse({ id: '1', name: 'Alice' }))
-        .mockResolvedValueOnce(mockResponse({ id: '2', name: 'Bob' }));
+        .mockResolvedValueOnce(mockResponse(['1']))
+        .mockResolvedValueOnce(mockResponse(['2']));
 
       const results = await manager.bulkCreate('users', objects, TOKEN);
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(results).toHaveLength(2);
-      expect(results[0]).toEqual({ id: '1', name: 'Alice' });
-      expect(results[1]).toEqual({ id: '2', name: 'Bob' });
+      expect(results[0]).toEqual({ id: '1' });
+      expect(results[1]).toEqual({ id: '2' });
     });
 
     it('returns empty array for empty input', async () => {

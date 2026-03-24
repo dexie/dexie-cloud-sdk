@@ -8,7 +8,7 @@
 import type { HttpAdapter } from './adapters.js';
 import type { AuthTokens } from './types.js';
 import { DexieCloudAuthError } from './types.js';
-import { DataManager } from './data.js';
+import { DataManager, type DataAccess } from './data.js';
 import { BlobManager } from './blob.js';
 import { stringifyBody } from './http-utils.js';
 import { parseResponse } from './http-utils.js';
@@ -167,17 +167,13 @@ export class DatabaseSession {
    * uses a separate cache entry for tokens.
    */
   asUser(claims: ImpersonateClaims): DatabaseSession {
+    const bm = new BlobManager(this.dbUrl, this.http);
     return new DatabaseSession(
       this.dbUrl,
       { ...this.credentials, impersonate: claims },
       this.http,
-      // Re-create managers so each session points to the same dbUrl
-      new BlobManager(this.dbUrl, this.http),
-      new DataManager(
-        this.dbUrl,
-        this.http,
-        new BlobManager(this.dbUrl, this.http),
-      ),
+      bm,
+      new DataManager(this.dbUrl, this.http, bm, 'my'),
     );
   }
 
@@ -216,8 +212,8 @@ export class DatabaseSession {
       client_id: clientId,
       client_secret: clientSecret,
       scopes: isImpersonation
-        ? ['ACCESS_DB', 'IMPERSONATE']
-        : ['ACCESS_DB'],
+        ? ['ACCESS_DB', 'IMPERSONATE', 'MANAGE_DB']  // MANAGE_DB skips verifySubscription
+        : ['ACCESS_DB', 'GLOBAL_READ', 'GLOBAL_WRITE'],  // GLOBAL_* needed for /all/ access
     };
 
     if (isImpersonation) {
