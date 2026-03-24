@@ -1,0 +1,68 @@
+version: '3.8'
+
+# Dexie Cloud SDK E2E Test Stack
+# Usage: docker compose -f docker-compose.test.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dexiecloud
+      POSTGRES_PASSWORD: testpass123
+      POSTGRES_DB: dexiecloud
+    ports:
+      - "5439:5432"
+    volumes:
+      - ../dexie-cloud/libs/dexie-cloud-server/sql/create-schema.pgsql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dexiecloud -d dexiecloud"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sdk-test
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+    networks:
+      - sdk-test
+
+  dexie-cloud-server:
+    build:
+      context: ../dexie-cloud/libs/dexie-cloud-server
+      dockerfile: Dockerfile
+    command: ["node", "dexie-cloud-server.js"]
+    environment:
+      POSTGRESQLCONNSTR_DEXIE_CLOUD: postgresql://dexiecloud:testpass123@postgres:5432/dexiecloud
+      JWT_SECRET: e2e-test-jwt-secret-key-12345
+      ISSUER: http://localhost:3000
+      PUBLIC_DB_CREATE: "true"
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: test
+      SMTP_PASS: test
+      SMTP_REQUIRE_TLS: "false"
+      SYSTEM_EMAIL: "Dexie Cloud Test <test@dexie.local>"
+      NODE_ENV: test
+      PORT: 3000
+      DB_SECRET: e2e-test-db-secret-key-12345-for-blob-storage
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 10s
+    networks:
+      - sdk-test
+
+networks:
+  sdk-test:
+    driver: bridge

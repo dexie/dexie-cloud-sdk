@@ -1,0 +1,64 @@
+name: E2E Tests
+
+# E2E tests require building dexie-cloud-server from source (../dexie-cloud).
+# They run manually or on a nightly schedule — not on every PR push.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'  # Nightly at 03:00 UTC
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout dexie-cloud (for server build)
+        uses: actions/checkout@v4
+        with:
+          repository: dexie/dexie-cloud
+          token: ${{ secrets.DEXIE_CLOUD_TOKEN }}
+          path: ../dexie-cloud
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: pnpm install
+
+      - name: Start test stack
+        run: docker compose -f docker-compose.test.yml up -d --build
+
+      - name: Wait for server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/ready > /dev/null 2>&1; then
+              echo "Server ready"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 2
+          done
+          echo "Server failed to start"
+          docker compose -f docker-compose.test.yml logs dexie-cloud-server
+          exit 1
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e
+        env:
+          DEXIE_CLOUD_URL: http://localhost:3001
+          MAILHOG_API: http://localhost:8026
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs
+
+      - name: Stop test stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
