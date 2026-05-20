@@ -1,14 +1,14 @@
 {
   "name": "dexie-cloud-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official JavaScript SDK for Dexie Cloud - Local-first database with sync",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.esm.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
   },
