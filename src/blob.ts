@@ -5,9 +5,9 @@
  * of objects containing inline or referenced blob data.
  */
 
-import type { HttpAdapter } from './adapters.js';
-import type { BlobHandling, BlobRef } from './types.js';
-import { DexieCloudError } from './types.js';
+import type { HttpAdapter } from "./adapters.js";
+import type { BlobHandling, BlobRef } from "./types.js";
+import { DexieCloudError } from "./types.js";
 
 /**
  * Minimum byte size for offloading a binary to blob storage.
@@ -24,20 +24,28 @@ const MAX_CONCURRENT_DOWNLOADS = 6;
 
 /** Generate a unique blob ID */
 function generateBlobId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID().replace(/-/g, '');
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID().replace(/-/g, "");
   }
   // Fallback: use getRandomValues for strong entropy
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.getRandomValues === "function"
+  ) {
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
     return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
   // Last resort (non-browser, non-Node env): still better than Math.random alone
   const ts = Date.now().toString(16);
-  const rand = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  const rand = Math.floor(Math.random() * 0xffffffff)
+    .toString(16)
+    .padStart(8, "0");
   return ts + rand;
 }
 
@@ -47,11 +55,11 @@ function generateBlobId(): string {
  * Uint8Array, ArrayBuffer, and Blob.
  */
 async function toUint8Array(
-  data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView
+  data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView,
 ): Promise<Uint8Array> {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
     const buf = await data.arrayBuffer();
     return new Uint8Array(buf);
   }
@@ -59,16 +67,18 @@ async function toUint8Array(
   if (ArrayBuffer.isView(data)) {
     return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
-  throw new TypeError('Unsupported data type for blob upload');
+  throw new TypeError("Unsupported data type for blob upload");
 }
 
 /** Detect inline blob: has _bt + v props */
-function isInlineBlob(val: any): val is { _bt: string; v: string; ct?: string } {
+function isInlineBlob(
+  val: any,
+): val is { _bt: string; v: string; ct?: string } {
   return (
     val !== null &&
-    typeof val === 'object' &&
-    typeof val._bt === 'string' &&
-    typeof val.v === 'string'
+    typeof val === "object" &&
+    typeof val._bt === "string" &&
+    typeof val.v === "string"
   );
 }
 
@@ -76,18 +86,26 @@ function isInlineBlob(val: any): val is { _bt: string; v: string; ct?: string } 
 function isBlobRef(val: any): val is BlobRef {
   return (
     val !== null &&
-    typeof val === 'object' &&
-    typeof val._bt === 'string' &&
-    typeof val.ref === 'string' &&
+    typeof val === "object" &&
+    typeof val._bt === "string" &&
+    typeof val.ref === "string" &&
     val.v === undefined
   );
 }
 
+/** Recursively check if an object tree contains any BlobRef */
+function _containsBlobRef(val: any): boolean {
+  if (val === null || typeof val !== "object") return false;
+  if (isBlobRef(val)) return true;
+  if (Array.isArray(val)) return val.some(_containsBlobRef);
+  return Object.values(val).some(_containsBlobRef);
+}
+
 /** Decode base64 string to Uint8Array */
 function base64ToUint8Array(b64: string): Uint8Array {
-  if (typeof Buffer !== 'undefined') {
+  if (typeof Buffer !== "undefined") {
     // Node.js
-    return new Uint8Array(Buffer.from(b64, 'base64'));
+    return new Uint8Array(Buffer.from(b64, "base64"));
   }
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
@@ -99,10 +117,10 @@ function base64ToUint8Array(b64: string): Uint8Array {
 
 /** Encode Uint8Array to base64 string */
 function uint8ArrayToBase64(data: Uint8Array): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(data).toString('base64');
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(data).toString("base64");
   }
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < data.length; i++) {
     binary += String.fromCharCode(data[i]!);
   }
@@ -116,8 +134,8 @@ export class BlobManager {
   constructor(
     private dbUrl: string,
     private http: HttpAdapter,
-    private mode: BlobHandling = 'auto',
-    private maxStringLength: number = DEFAULT_MAX_STRING_LENGTH
+    private mode: BlobHandling = "auto",
+    private maxStringLength: number = DEFAULT_MAX_STRING_LENGTH,
   ) {}
 
   /**
@@ -126,7 +144,7 @@ export class BlobManager {
    */
   async upload(
     data: Uint8Array | Blob | ArrayBuffer | ArrayBufferView,
-    contentType: string = 'application/octet-stream',
+    contentType: string = "application/octet-stream",
     token: string,
   ): Promise<string> {
     const blobId = generateBlobId();
@@ -134,25 +152,25 @@ export class BlobManager {
     const bytes = await toUint8Array(data);
 
     const response = await this.http.fetch(url, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': contentType,
+        "Content-Type": contentType,
       },
       body: bytes as unknown as BodyInit,
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
+      const text = await response.text().catch(() => "");
       throw new DexieCloudError(
         `Blob upload failed HTTP ${response.status}: ${text || response.statusText}`,
         response.status,
-        text
+        text,
       );
     }
 
     // Parse the version from the response body (server returns the final ref)
-    const text = await response.text().catch(() => '');
+    const text = await response.text().catch(() => "");
     if (text && text.trim()) {
       try {
         const parsed = JSON.parse(text);
@@ -161,7 +179,7 @@ export class BlobManager {
         // ignore parse errors, fall through
       }
       // If server returned "version:blobId" directly
-      if (text.includes(':')) return text.trim();
+      if (text.includes(":")) return text.trim();
     }
 
     // Server response was unparseable — we cannot safely construct a ref
@@ -170,30 +188,34 @@ export class BlobManager {
       `Blob upload succeeded (HTTP ${response.status}) but server returned no parseable ref. ` +
         `Cannot construct a safe blob reference without the server-assigned version.`,
       response.status,
-      text
+      text,
     );
   }
 
   /**
    * Download a blob by ref (format: "version:blobId").
    */
-  async download(ref: string, token: string): Promise<{ data: Uint8Array; contentType: string }> {
+  async download(
+    ref: string,
+    token: string,
+  ): Promise<{ data: Uint8Array; contentType: string }> {
     const url = `${this.dbUrl}/blob/${encodeURIComponent(ref)}`;
     const response = await this.http.fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
+      const text = await response.text().catch(() => "");
       throw new DexieCloudError(
         `Blob download failed HTTP ${response.status}: ${text || response.statusText}`,
         response.status,
-        text
+        text,
       );
     }
 
-    const contentType = response.headers?.get('content-type') ?? 'application/octet-stream';
+    const contentType =
+      response.headers?.get("content-type") ?? "application/octet-stream";
     const arrayBuffer = await response.arrayBuffer();
     return { data: new Uint8Array(arrayBuffer), contentType };
   }
@@ -204,8 +226,20 @@ export class BlobManager {
    * Small binaries are left inline. Only active in 'auto' mode.
    */
   async processForUpload(obj: any, token: string): Promise<any> {
-    if (this.mode !== 'auto') return obj;
-    return this._walkForUpload(obj, token);
+    if (this.mode !== "auto") return obj;
+    const result = await this._walkForUpload(obj, token);
+    // Set _hasBlobRefs = 1 if any blobs were offloaded so the server knows
+    // to scan for BlobRefs and populate blob_refs for GC tracking.
+    if (
+      result !== obj &&
+      result !== null &&
+      typeof result === "object" &&
+      !Array.isArray(result) &&
+      _containsBlobRef(result)
+    ) {
+      result._hasBlobRefs = 1;
+    }
+    return result;
   }
 
   /**
@@ -213,16 +247,20 @@ export class BlobManager {
    * replace with inline data. Only active in 'auto' mode.
    */
   async processForRead(obj: any, token: string): Promise<any> {
-    if (this.mode !== 'auto') return obj;
+    if (this.mode !== "auto") return obj;
     return this._walkForRead(obj, token);
   }
 
   private async _walkForUpload(val: any, token: string): Promise<any> {
     // Check long strings
-    if (typeof val === 'string' && val.length > this.maxStringLength && this.maxStringLength !== Infinity) {
+    if (
+      typeof val === "string" &&
+      val.length > this.maxStringLength &&
+      this.maxStringLength !== Infinity
+    ) {
       const bytes = new TextEncoder().encode(val);
-      const ref = await this.upload(bytes, 'text/plain;charset=utf-8', token);
-      return { _bt: 'string', ref, size: bytes.length } as BlobRef;
+      const ref = await this.upload(bytes, "text/plain;charset=utf-8", token);
+      return { _bt: "string", ref, size: bytes.length } as BlobRef;
     }
 
     if (isInlineBlob(val)) {
@@ -233,13 +271,13 @@ export class BlobManager {
       if (bytes.length < BLOB_THRESHOLD) {
         return val; // keep as-is
       }
-      const contentType = val.ct ?? 'application/octet-stream';
+      const contentType = val.ct ?? "application/octet-stream";
       const ref = await this.upload(bytes, contentType, token);
       const blobRef: BlobRef = {
         _bt: val._bt,
         ref,
         size: bytes.length,
-        ...(val._bt === 'Blob' && val.ct ? { ct: val.ct } : {}),
+        ...(val._bt === "Blob" && val.ct ? { ct: val.ct } : {}),
       };
       return blobRef;
     }
@@ -248,9 +286,11 @@ export class BlobManager {
       return Promise.all(val.map((item) => this._walkForUpload(item, token)));
     }
 
-    if (val !== null && typeof val === 'object') {
+    if (val !== null && typeof val === "object") {
       const entries = await Promise.all(
-        Object.entries(val).map(async ([k, v]) => [k, await this._walkForUpload(v, token)] as const)
+        Object.entries(val).map(
+          async ([k, v]) => [k, await this._walkForUpload(v, token)] as const,
+        ),
       );
       return Object.fromEntries(entries);
     }
@@ -261,7 +301,7 @@ export class BlobManager {
   private async _walkForRead(val: any, token: string): Promise<any> {
     if (isBlobRef(val)) {
       // String type: download and decode UTF-8 back to string
-      if (val._bt === 'string') {
+      if (val._bt === "string") {
         const { data } = await this.download(val.ref, token);
         return new TextDecoder().decode(data);
       }
@@ -269,7 +309,7 @@ export class BlobManager {
       return {
         _bt: val._bt,
         v: uint8ArrayToBase64(data),
-        ...(val._bt === 'Blob' ? { ct: val.ct ?? contentType } : {}),
+        ...(val._bt === "Blob" ? { ct: val.ct ?? contentType } : {}),
       };
     }
 
@@ -278,11 +318,10 @@ export class BlobManager {
       return this._parallelMap(val, (item) => this._walkForRead(item, token));
     }
 
-    if (val !== null && typeof val === 'object') {
+    if (val !== null && typeof val === "object") {
       const keys = Object.keys(val);
-      const resolvedValues = await this._parallelMap(
-        keys,
-        (k) => this._walkForRead(val[k], token)
+      const resolvedValues = await this._parallelMap(keys, (k) =>
+        this._walkForRead(val[k], token),
       );
       const result: Record<string, any> = {};
       for (let i = 0; i < keys.length; i++) {
@@ -299,7 +338,7 @@ export class BlobManager {
    */
   private async _parallelMap<T, R>(
     items: T[],
-    fn: (item: T) => Promise<R>
+    fn: (item: T) => Promise<R>,
   ): Promise<R[]> {
     const results: R[] = new Array(items.length);
     let index = 0;
@@ -313,7 +352,7 @@ export class BlobManager {
 
     const workers = Array.from(
       { length: Math.min(MAX_CONCURRENT_DOWNLOADS, items.length) },
-      () => worker()
+      () => worker(),
     );
     await Promise.all(workers);
     return results;
