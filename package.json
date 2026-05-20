@@ -1,6 +1,6 @@
 {
   "name": "dexie-cloud-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official JavaScript SDK for Dexie Cloud - Local-first database with sync",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
